@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using Discord;
 using Discord.Addons.Interactive;
 using Discord.Commands;
 
@@ -35,10 +37,32 @@ namespace SampleApp.Modules
         // You can customize the criteria for the paginator as well, which defaults to restricting to the source user
         // This method will not block.
         [Command("paginator")]
-        public async Task Test_Paginator()
+        public async Task TestPaginator()
         {
             var pages = new[] { "Page 1", "Page 2", "Page 3", "aaaaaa", "Page 5" };
             await PagedReplyAsync(pages);
+        }
+
+        [Command("paginator embed")]
+        public async Task TestEmbedPaginator()
+        {
+            List<EmbedBuilder> embeds = new List<EmbedBuilder>();
+
+            embeds.Add(new EmbedBuilder
+            {
+                Description = "Hello World!"
+            });
+            embeds.Add(new EmbedBuilder
+            {
+                Description = "This is the second page"
+            });
+
+            await PagedReplyAsync(embeds, new PaginatedAppearanceOptions
+            {
+                Info = null,
+                JumpDisplayOptions = JumpDisplayOptions.Never,
+                
+            });
         }
     }
 }

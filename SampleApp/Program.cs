@@ -23,7 +23,10 @@ namespace SampleApp
         {
             var token = File.ReadAllText("token.ignore");
 
-            client = new DiscordSocketClient();
+            client = new DiscordSocketClient(new DiscordSocketConfig()
+            {
+                LogLevel = LogSeverity.Verbose
+            });
 
             client.Log += log =>
             {
@@ -53,7 +56,7 @@ namespace SampleApp
             if (msg.Author.IsBot) return;
 
             int argPos = 0;
-            if (!(msg.HasStringPrefix("i~>", ref argPos))) return;
+            if (!(msg.HasStringPrefix("?", ref argPos))) return;
 
             var context = new SocketCommandContext(client, msg);
             await commands.ExecuteAsync(context, argPos, services);

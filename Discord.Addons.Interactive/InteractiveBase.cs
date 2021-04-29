@@ -11,8 +11,7 @@ namespace Discord.Addons.Interactive
     {
     }
 
-    public abstract class InteractiveBase<T> : ModuleBase<T>
-        where T : SocketCommandContext
+    public abstract class InteractiveBase<T> : ModuleBase<T> where T : SocketCommandContext
     {
         public InteractiveService Interactive { get; set; }
 
@@ -24,14 +23,16 @@ namespace Discord.Addons.Interactive
         public Task<IUserMessage> ReplyAndDeleteAsync(string content, bool isTTS = false, Embed embed = null, TimeSpan? timeout = null, RequestOptions options = null)
             => Interactive.ReplyAndDeleteAsync(Context, content, isTTS, embed, timeout, options);
 
-        public Task<IUserMessage> PagedReplyAsync(IEnumerable<object> pages, bool fromSourceUser = true)
+        public Task<IUserMessage> PagedReplyAsync(IEnumerable<object> pages, PaginatedAppearanceOptions options = null, bool fromSourceUser = true)
         {
             var pager = new PaginatedMessage
             {
-                Pages = pages
+                Pages = pages,
+                Options = options ?? PaginatedAppearanceOptions.Default
             };
             return PagedReplyAsync(pager, fromSourceUser);
         }
+        
         public Task<IUserMessage> PagedReplyAsync(PaginatedMessage pager, bool fromSourceUser = true)
         {
             var criterion = new Criteria<SocketReaction>();

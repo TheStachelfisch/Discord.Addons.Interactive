@@ -25,10 +25,7 @@ namespace Discord.Addons.Interactive
         private int page = 1;
         
 
-        public PaginatedMessageCallback(InteractiveService interactive, 
-            SocketCommandContext sourceContext,
-            PaginatedMessage pager,
-            ICriterion<SocketReaction> criterion = null)
+        public PaginatedMessageCallback(InteractiveService interactive, SocketCommandContext sourceContext, PaginatedMessage pager, ICriterion<SocketReaction> criterion = null)
         {
             Interactive = interactive;
             Context = sourceContext;
@@ -48,10 +45,14 @@ namespace Discord.Addons.Interactive
             // Reactions take a while to add, don't wait for them
             _ = Task.Run(async () =>
             {
-                await message.AddReactionAsync(options.First);
-                await message.AddReactionAsync(options.Back);
-                await message.AddReactionAsync(options.Next);
-                await message.AddReactionAsync(options.Last);
+                if (options.First != null)
+                    await message.AddReactionAsync(options.First);
+                if (options.Back != null)
+                    await message.AddReactionAsync(options.Back);
+                if (options.Next != null) 
+                    await message.AddReactionAsync(options.Next);
+                if (options.Last != null) 
+                    await message.AddReactionAsync(options.Last);
 
                 var manageMessages = (Context.Channel is IGuildChannel guildChannel)
                     ? (Context.User as IGuildUser).GetPermissions(guildChannel).ManageMessages
@@ -72,7 +73,7 @@ namespace Discord.Addons.Interactive
                 _ = Task.Delay(Timeout.Value).ContinueWith(_ =>
                 {
                     Interactive.RemoveReactionCallback(message);
-                    _ = Message.DeleteAsync();
+                    _ = Message.RemoveAllReactionsAsync();
                 });
             }
         }
@@ -135,6 +136,12 @@ namespace Discord.Addons.Interactive
         
         protected virtual Embed BuildEmbed()
         {
+            if (_pager.Pages is IEnumerable<EmbedBuilder> eb)
+                return eb.Skip(page - 1)
+                    .First()
+                    .WithFooter(f => f.Text = string.Format(options.FooterFormat, page, pages))
+                    .Build();
+
             var builder = new EmbedBuilder()
                 .WithAuthor(_pager.Author)
                 .WithColor(_pager.Color)
