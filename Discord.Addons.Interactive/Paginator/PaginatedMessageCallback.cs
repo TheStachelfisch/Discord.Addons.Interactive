@@ -48,38 +48,35 @@ namespace Discord.Addons.Interactive
             // Reactions take a while to add, don't wait for them
             _ = Task.Run(async () =>
             {
-                List<IEmote> emotes = new List<IEmote>();
-
                 if (options.First != null)
-                    emotes.Add(options.First);
+                    await message.AddReactionAsync(options.First);
                 if (options.Back != null)
-                    emotes.Add(options.Back);
+                    await message.AddReactionAsync(options.Back);
                 if (options.Next != null) 
-                    emotes.Add(options.Next);
+                    await message.AddReactionAsync(options.Next);
                 if (options.Last != null) 
-                    emotes.Add(options.Last);
+                    await message.AddReactionAsync(options.Last);
 
-                var manageMessages = (Context.Channel is IGuildChannel guildChannel) && (Context.User as IGuildUser)!.GetPermissions(guildChannel).ManageMessages;
+                var manageMessages = Context.Channel is IGuildChannel guildChannel && (Context.User as IGuildUser)!.GetPermissions(guildChannel).ManageMessages;
 
                 if (options.JumpDisplayOptions == JumpDisplayOptions.Always
                     || options.JumpDisplayOptions == JumpDisplayOptions.WithManageMessages && manageMessages)
-                    emotes.Add(options.Jump);
+                    await message.AddReactionAsync(options.Jump);
 
-                emotes.Add(options.Stop);
+                await message.AddReactionAsync(options.Stop);
 
                 if (options.DisplayInformationIcon)
-                    emotes.Add(options.Info);
-                
-                await message.AddReactionsAsync(emotes.ToArray());
+                    await message.AddReactionAsync(options.Info);
             });
             // TODO: (Next major version) timeouts need to be handled at the service-level!
             if (Timeout.HasValue)
             {
-                _inactivityTimer = new Timer(_ =>
+                _inactivityTimer = new Timer(s =>
                 {
                     Interactive.RemoveReactionCallback(message);
                     _ = Message.RemoveAllReactionsAsync();
-                }, null, TimeSpan.Zero, Timeout.Value);
+                    _inactivityTimer.Dispose();
+                }, null, Timeout.Value, TimeSpan.Zero);
             }
         }
 
@@ -106,6 +103,7 @@ namespace Discord.Addons.Interactive
             else if (emote.Equals(options.Stop))
             {
                 await Message.RemoveAllReactionsAsync().ConfigureAwait(false);
+                await _inactivityTimer.DisposeAsync();
                 return true;
             }
             else if (emote.Equals(options.Jump))
@@ -167,7 +165,7 @@ namespace Discord.Addons.Interactive
         private async Task RenderAsync()
         {
             if (Timeout.HasValue)
-                _inactivityTimer.Change(TimeSpan.Zero, Timeout!.Value);
+                _inactivityTimer.Change(Timeout!.Value, TimeSpan.Zero);
 
             var embed = BuildEmbed();
             await Message.ModifyAsync(m => m.Embed = embed).ConfigureAwait(false);
