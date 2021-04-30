@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Discord.Commands;
 using Discord.WebSocket;
@@ -21,6 +22,7 @@ namespace Discord.Addons.Interactive
         private readonly PaginatedMessage _pager;
 
         private PaginatedAppearanceOptions options => _pager.Options;
+        private Timer _inactivityTimer;
         private readonly int pages;
         private int page = 1;
         
@@ -42,39 +44,42 @@ namespace Discord.Addons.Interactive
             var message = await Context.Channel.SendMessageAsync(_pager.Content, embed: embed).ConfigureAwait(false);
             Message = message;
             Interactive.AddReactionCallback(message, this);
+            
             // Reactions take a while to add, don't wait for them
             _ = Task.Run(async () =>
             {
-                if (options.First != null)
-                    await message.AddReactionAsync(options.First);
-                if (options.Back != null)
-                    await message.AddReactionAsync(options.Back);
-                if (options.Next != null) 
-                    await message.AddReactionAsync(options.Next);
-                if (options.Last != null) 
-                    await message.AddReactionAsync(options.Last);
+                List<IEmote> emotes = new List<IEmote>();
 
-                var manageMessages = (Context.Channel is IGuildChannel guildChannel)
-                    ? (Context.User as IGuildUser).GetPermissions(guildChannel).ManageMessages
-                    : false;
+                if (options.First != null)
+                    emotes.Add(options.First);
+                if (options.Back != null)
+                    emotes.Add(options.Back);
+                if (options.Next != null) 
+                    emotes.Add(options.Next);
+                if (options.Last != null) 
+                    emotes.Add(options.Last);
+
+                var manageMessages = (Context.Channel is IGuildChannel guildChannel) && (Context.User as IGuildUser)!.GetPermissions(guildChannel).ManageMessages;
 
                 if (options.JumpDisplayOptions == JumpDisplayOptions.Always
-                    || (options.JumpDisplayOptions == JumpDisplayOptions.WithManageMessages && manageMessages))
-                    await message.AddReactionAsync(options.Jump);
+                    || options.JumpDisplayOptions == JumpDisplayOptions.WithManageMessages && manageMessages)
+                    emotes.Add(options.Jump);
 
-                await message.AddReactionAsync(options.Stop);
+                emotes.Add(options.Stop);
 
                 if (options.DisplayInformationIcon)
-                    await message.AddReactionAsync(options.Info);
+                    emotes.Add(options.Info);
+                
+                await message.AddReactionsAsync(emotes.ToArray());
             });
             // TODO: (Next major version) timeouts need to be handled at the service-level!
-            if (Timeout.HasValue && Timeout.Value != null)
+            if (Timeout.HasValue)
             {
-                _ = Task.Delay(Timeout.Value).ContinueWith(_ =>
+                _inactivityTimer = new Timer(_ =>
                 {
                     Interactive.RemoveReactionCallback(message);
                     _ = Message.RemoveAllReactionsAsync();
-                });
+                }, null, TimeSpan.Zero, Timeout.Value);
             }
         }
 
@@ -161,6 +166,9 @@ namespace Discord.Addons.Interactive
         }
         private async Task RenderAsync()
         {
+            if (Timeout.HasValue)
+                _inactivityTimer.Change(TimeSpan.Zero, Timeout!.Value);
+
             var embed = BuildEmbed();
             await Message.ModifyAsync(m => m.Embed = embed).ConfigureAwait(false);
         }
