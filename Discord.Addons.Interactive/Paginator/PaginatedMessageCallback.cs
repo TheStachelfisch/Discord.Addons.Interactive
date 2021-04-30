@@ -105,7 +105,7 @@ namespace Discord.Addons.Interactive
                 page = pages;
             else if (emote.Equals(options.Stop))
             {
-                await Message.DeleteAsync().ConfigureAwait(false);
+                await Message.RemoveAllReactionsAsync().ConfigureAwait(false);
                 return true;
             }
             else if (emote.Equals(options.Jump))
