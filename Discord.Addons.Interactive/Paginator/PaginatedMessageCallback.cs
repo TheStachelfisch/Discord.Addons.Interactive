@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Discord.Commands;
 using Discord.WebSocket;
 
+// ReSharper disable once CheckNamespace
 namespace Discord.Addons.Interactive
 {
     public class PaginatedMessageCallback : IReactionCallback
@@ -16,26 +17,25 @@ namespace Discord.Addons.Interactive
 
         public RunMode RunMode => RunMode.Sync;
         public ICriterion<SocketReaction> Criterion => _criterion;
-        public TimeSpan? Timeout => options.Timeout;
+        public TimeSpan? Timeout => Options.Timeout;
 
         private readonly ICriterion<SocketReaction> _criterion;
         private readonly PaginatedMessage _pager;
 
-        private PaginatedAppearanceOptions options => _pager.Options;
+        private PaginatedAppearanceOptions Options => _pager.Options;
         private Timer _inactivityTimer;
-        private readonly int pages;
-        private int page = 1;
+        private readonly int _pages;
+        private int _page = 1;
         
-
         public PaginatedMessageCallback(InteractiveService interactive, SocketCommandContext sourceContext, PaginatedMessage pager, ICriterion<SocketReaction> criterion = null)
         {
             Interactive = interactive;
             Context = sourceContext;
             _criterion = criterion ?? new EmptyCriterion<SocketReaction>();
             _pager = pager;
-            pages = _pager.Pages.Count();
+            _pages = _pager.Pages.Count();
             if (_pager.Pages is IEnumerable<EmbedFieldBuilder>)
-                pages = ((_pager.Pages.Count() - 1) / options.FieldsPerPage) + 1;
+                _pages = ((_pager.Pages.Count() - 1) / Options.FieldsPerPage) + 1;
         }
 
         public async Task DisplayAsync()
@@ -48,25 +48,25 @@ namespace Discord.Addons.Interactive
             // Reactions take a while to add, don't wait for them
             _ = Task.Run(async () =>
             {
-                if (options.First != null)
-                    await message.AddReactionAsync(options.First);
-                if (options.Back != null)
-                    await message.AddReactionAsync(options.Back);
-                if (options.Next != null) 
-                    await message.AddReactionAsync(options.Next);
-                if (options.Last != null) 
-                    await message.AddReactionAsync(options.Last);
+                if (Options.First != null)
+                    await message.AddReactionAsync(Options.First);
+                if (Options.Back != null)
+                    await message.AddReactionAsync(Options.Back);
+                if (Options.Next != null) 
+                    await message.AddReactionAsync(Options.Next);
+                if (Options.Last != null) 
+                    await message.AddReactionAsync(Options.Last);
 
                 var manageMessages = Context.Channel is IGuildChannel guildChannel && (Context.User as IGuildUser)!.GetPermissions(guildChannel).ManageMessages;
 
-                if (options.JumpDisplayOptions == JumpDisplayOptions.Always
-                    || options.JumpDisplayOptions == JumpDisplayOptions.WithManageMessages && manageMessages)
-                    await message.AddReactionAsync(options.Jump);
+                if (Options.JumpDisplayOptions == JumpDisplayOptions.Always
+                    || Options.JumpDisplayOptions == JumpDisplayOptions.WithManageMessages && manageMessages)
+                    await message.AddReactionAsync(Options.Jump);
 
-                await message.AddReactionAsync(options.Stop);
+                await message.AddReactionAsync(Options.Stop);
 
-                if (options.DisplayInformationIcon)
-                    await message.AddReactionAsync(options.Info);
+                if (Options.DisplayInformationIcon)
+                    await message.AddReactionAsync(Options.Info);
             });
             // TODO: (Next major version) timeouts need to be handled at the service-level!
             if (Timeout.HasValue)
@@ -84,29 +84,29 @@ namespace Discord.Addons.Interactive
         {
             var emote = reaction.Emote;
 
-            if (emote.Equals(options.First))
-                page = 1;
-            else if (emote.Equals(options.Next))
+            if (emote.Equals(Options.First))
+                _page = 1;
+            else if (emote.Equals(Options.Next))
             {
-                if (page >= pages)
+                if (_page >= _pages)
                     return false;
-                ++page;
+                ++_page;
             }
-            else if (emote.Equals(options.Back))
+            else if (emote.Equals(Options.Back))
             {
-                if (page <= 1)
+                if (_page <= 1)
                     return false;
-                --page;
+                --_page;
             }
-            else if (emote.Equals(options.Last))
-                page = pages;
-            else if (emote.Equals(options.Stop))
+            else if (emote.Equals(Options.Last))
+                _page = _pages;
+            else if (emote.Equals(Options.Stop))
             {
                 await Message.RemoveAllReactionsAsync().ConfigureAwait(false);
                 await _inactivityTimer.DisposeAsync();
                 return true;
             }
-            else if (emote.Equals(options.Jump))
+            else if (emote.Equals(Options.Jump))
             {
                 _ = Task.Run(async () =>
                 {
@@ -116,20 +116,20 @@ namespace Discord.Addons.Interactive
                         .AddCriterion(new EnsureIsIntegerCriterion());
                     var response = await Interactive.NextMessageAsync(Context, criteria, TimeSpan.FromSeconds(15));
                     var request = int.Parse(response.Content);
-                    if (request < 1 || request > pages)
+                    if (request < 1 || request > _pages)
                     {
                         _ = response.DeleteAsync().ConfigureAwait(false);
-                        await Interactive.ReplyAndDeleteAsync(Context, options.Stop.Name);
+                        await Interactive.ReplyAndDeleteAsync(Context, Options.Stop.Name);
                         return;
                     }
-                    page = request;
+                    _page = request;
                     _ = response.DeleteAsync().ConfigureAwait(false);
                     await RenderAsync().ConfigureAwait(false);
                 });
             }
-            else if (emote.Equals(options.Info))
+            else if (emote.Equals(Options.Info))
             {
-                await Interactive.ReplyAndDeleteAsync(Context, options.InformationText, timeout: options.InfoTimeout);
+                await Interactive.ReplyAndDeleteAsync(Context, Options.InformationText, timeout: Options.InfoTimeout);
                 return false;
             }
             _ = Message.RemoveReactionAsync(reaction.Emote, reaction.User.Value);
@@ -140,24 +140,24 @@ namespace Discord.Addons.Interactive
         protected virtual Embed BuildEmbed()
         {
             if (_pager.Pages is IEnumerable<EmbedBuilder> eb)
-                return eb.Skip(page - 1)
+                return eb.Skip(_page - 1)
                     .First()
-                    .WithFooter(f => f.Text = string.Format(options.FooterFormat, page, pages))
+                    .WithFooter(f => f.Text = string.Format(Options.FooterFormat, _page, _pages))
                     .Build();
 
             var builder = new EmbedBuilder()
                 .WithAuthor(_pager.Author)
                 .WithColor(_pager.Color)
-                .WithFooter(f => f.Text = string.Format(options.FooterFormat, page, pages))
+                .WithFooter(f => f.Text = string.Format(Options.FooterFormat, _page, _pages))
                 .WithTitle(_pager.Title);
             if (_pager.Pages is IEnumerable<EmbedFieldBuilder> efb)
             {
-                builder.Fields = efb.Skip((page - 1) * options.FieldsPerPage).Take(options.FieldsPerPage).ToList();
+                builder.Fields = efb.Skip((_page - 1) * Options.FieldsPerPage).Take(Options.FieldsPerPage).ToList();
                 builder.Description = _pager.AlternateDescription;
             } 
             else
             {
-                builder.Description = _pager.Pages.ElementAt(page - 1).ToString();
+                builder.Description = _pager.Pages.ElementAt(_page - 1).ToString();
             }
             
             return builder.Build();
