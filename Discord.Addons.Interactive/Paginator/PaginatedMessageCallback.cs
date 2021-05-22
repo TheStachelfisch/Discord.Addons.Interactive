@@ -26,6 +26,8 @@ namespace Discord.Addons.Interactive
         private Timer _inactivityTimer;
         private readonly int _pages;
         private int _page = 1;
+
+        private bool _activeJump = false;
         
         public PaginatedMessageCallback(InteractiveService interactive, SocketCommandContext sourceContext, PaginatedMessage pager, ICriterion<SocketReaction> criterion = null)
         {
@@ -68,6 +70,7 @@ namespace Discord.Addons.Interactive
                 if (Options.DisplayInformationIcon)
                     await message.AddReactionAsync(Options.Info);
             });
+            
             // TODO: (Next major version) timeouts need to be handled at the service-level!
             if (Timeout.HasValue)
             {
@@ -108,24 +111,41 @@ namespace Discord.Addons.Interactive
             }
             else if (emote.Equals(Options.Jump))
             {
-                _ = Task.Run(async () =>
+                if (!_activeJump)
                 {
-                    var criteria = new Criteria<SocketMessage>()
-                        .AddCriterion(new EnsureSourceChannelCriterion())
-                        .AddCriterion(new EnsureFromUserCriterion(reaction.UserId))
-                        .AddCriterion(new EnsureIsIntegerCriterion());
-                    var response = await Interactive.NextMessageAsync(Context, criteria, TimeSpan.FromSeconds(15));
-                    var request = int.Parse(response.Content);
-                    if (request < 1 || request > _pages)
+                    Console.WriteLine($"Jump was activated: {Message.Id}");
+                    
+                    _ = Task.Run(async () =>
                     {
+                        _activeJump = true;
+                        
+                        var criteria = new Criteria<SocketMessage>()
+                            .AddCriterion(new EnsureSourceChannelCriterion())
+                            .AddCriterion(new EnsureFromUserCriterion(reaction.UserId))
+                            .AddCriterion(new EnsureIsIntegerCriterion());
+                    
+                        // Display, that a user should enter a page number
+                        await Message.ModifyAsync(m => m.Content = " **Enter a page number**\n _ _");
+                        // Wait for response
+                        var response = await Interactive.NextMessageAsync(Context, criteria, TimeSpan.FromSeconds(15));
+
+                        // Response will never be null my fucking ass
+                        if (response != null && int.TryParse(response.Content, out int result) && result > 1 && result < _pages)
+                            _page = result;
+
+                        Console.WriteLine("Does it even reach this part?");
+                        
+                        _ = Message.ModifyAsync(m => m.Content = "");
+                        _activeJump = false;
                         _ = response.DeleteAsync().ConfigureAwait(false);
-                        await Interactive.ReplyAndDeleteAsync(Context, Options.Stop.Name);
-                        return;
-                    }
-                    _page = request;
-                    _ = response.DeleteAsync().ConfigureAwait(false);
-                    await RenderAsync().ConfigureAwait(false);
-                });
+                        await RenderAsync().ConfigureAwait(false);
+                    });
+                }
+                
+                // We still want to remove the reaction though
+                _ = Message.RemoveReactionAsync(reaction.Emote, reaction.User.Value);
+                // We don't want it to render when jump was pressed
+                return false;
             }
             else if (emote.Equals(Options.Info))
             {

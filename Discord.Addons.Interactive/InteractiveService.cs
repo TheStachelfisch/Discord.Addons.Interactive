@@ -47,7 +47,7 @@ namespace Discord.Addons.Interactive
 
         public async Task<SocketMessage> NextMessageAsync(SocketCommandContext context, ICriterion<SocketMessage> criterion, TimeSpan? timeout = null, CancellationToken token = default)
         {
-            timeout = timeout ?? _defaultTimeout;
+            timeout ??= _defaultTimeout;
 
             var eventTrigger = new TaskCompletionSource<SocketMessage>();
             var cancelTrigger = new TaskCompletionSource<bool>();
@@ -77,7 +77,7 @@ namespace Discord.Addons.Interactive
 
         public async Task<IUserMessage> ReplyAndDeleteAsync(SocketCommandContext context, string content, bool isTTS = false, Embed embed = null, TimeSpan? timeout = null, RequestOptions options = null)
         {
-            timeout = timeout ?? _defaultTimeout;
+            timeout ??= _defaultTimeout;
             var message = await context.Channel.SendMessageAsync(content, isTTS, embed, options).ConfigureAwait(false);
             _ = Task.Delay(timeout.Value)
                 .ContinueWith(_ => message.DeleteAsync().ConfigureAwait(false))
